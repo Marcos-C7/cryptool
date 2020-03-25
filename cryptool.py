@@ -17,8 +17,6 @@ import struct
 import pdb
 
 
-
-
 class Cryptool:
 	'''
 	Class to simplify the encryption and decryption of data presented either in text strings, raw bytes or files.
