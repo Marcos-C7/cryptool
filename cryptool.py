@@ -1,20 +1,21 @@
 #!/usr/bin/env python
 # -*- coding: utf8 -*-
 
-#import hmac
-#import cryptography
-from cryptography.fernet import Fernet
+
+#import base64
+import os
+import time
+import struct
+import shutil
+import pdb
+
+
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, padding
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.hmac import HMAC
 
-import base64
-import os
-import time
-import struct
-import pdb
 
 
 class Cryptool:
@@ -35,16 +36,22 @@ class Cryptool:
 		self.salt = lambda: os.urandom(self.key_length)
 		# The file extension used to save encrypted files.
 		self.extension = "ctl"
+
+		# TAGS used to determine how to process the decrypted data.
+		# bytes:raw bytes string | str:text string | file:a file | dir:a directory
+		self.sources = {"bytes":1, "str":2, "file":3, "dir":4}
+		# The reverse mapping of the sources.
+		self.sources_r = {v:k for k,v in self.sources.items()}
 	#
 	
 	def getKDF(self, salt, length=None):
 		'''
 		Defines a Key Derivation Function (KDF). This is useful to generate secure cryptographic keys from
-		a simpler phrase like a password. Never generate two keys using the same pair (salt, password).
-		This function is used in all the functions that use a KDF.
+		a simpler phrase like a password. The same pair password-salt always generates the same password of
+		the given length. This function is used in all the functions that use a KDF.
 		Parameters:
-		- salt [bytes]: raw bytes string of size 'self.key_length', use 'self.salt()' to obtain a secure salt..
-		- length [int]: all the keys generated with the returned KDF will have this size in Bytes.
+		- salt [bytes]: raw bytes string of size 'self.key_length', use 'self.salt()' to obtain a secure salt.
+		- length [int]: the key generated with the returned KDF will have this size in Bytes.
 		Return:
 		- A key derivation function.
 		Usage:
@@ -131,14 +138,18 @@ class Cryptool:
 		return {"key":kdf.derive(password), "salt":salt}
 	#
 
-	def encryptMsg(self, msg, password):
+	def encryptMsg(self, msg, password, source="bytes"):
 		'''
 		Encrypts the given message using the given password. The encrypted data is autenticated via a MAC
-		signature. The result will be given in the form of an encryption card containing relevant information 
-		about the encryption procedure and the result.
+		signature. We can tell the 'source' where the data comes from, so that we can determine 
+		when we decrypt data if a special post-processing is needed. The diferent sources are:
+		"bytes":raw bytes string | "str":text string | "file":a file | "dir":a directory
+		The result will be given in the form of an encryption card containing relevant information about 
+		the encryption procedure and the result.
 		Prameters:
 		- msg [bytes/str]: the message to encrypt.
 		- password [bytes/str]: the password used for the encryption.
+		- source [str]: "bytes", "str", "file" or "dir". The default is "bytes".
 		Return:
 		[dict]: The encryption card in the form of a dictionary, with the following entries:
 		- "status" [str]: "OK" if everyhing went well, otherwise an error message.
@@ -166,14 +177,15 @@ class Cryptool:
 		secret = cipher.update(padded_msg) + cipher.finalize()
 		# Merge all the components that need to be signed.
 		current_time = int(time.time())
-		data = b"\x80" + credentials["salt"] + struct.pack(">Q", current_time) + iv + secret
+		source_flag = struct.pack(">Q", self.sources.get(source, "bytes"))
+		data = b"\x80" + source_flag + credentials["salt"] + struct.pack(">Q", current_time) + iv + secret
 		# Generate the signature. The signature will have the same size as the used hash algorithm.
 		signer = HMAC(key_aut, self.hash_algorithm, backend=default_backend())
 		signer.update(data)
 		hmac = signer.finalize()
 		
-		# data: ||b"\x80"||   salt   ||time||          iv               ||                   secret                         ||       signature             ||
-		# size: ||   1   ||key_length|| 8  ||cipher algorithm block size||padded msg multiple of cipher algorithm block size||digest size of hash algorithm||
+		# data: ||b"\x80"||source||   salt   ||time||          iv               ||                   secret                         ||       signature             ||
+		# size: ||   1   ||   8  ||key_length|| 8  ||cipher algorithm block size||padded msg multiple of cipher algorithm block size||digest size of hash algorithm||
 		# We include the time just in case we want to do something with it like expiration time.
 		return {"status":"OK", "signed_data":data + hmac}
 	#
@@ -187,12 +199,15 @@ class Cryptool:
 		be given in the form of a decryption card containing relevant information about the 
 		decryption procedure and the result.
 		Parameters:
-		- enc_card [dict]: the card with the encrypted data.
+		- enc_card [dict]: the card with the encrypted data, must have at least the entry
+		  "signed_data" mapping to the raw bytes string to decrypt.
 		- password [bytes/str]: the password to use in the decryption.
 		Return:
 		[dict]: The decryption card in the form of a dictionary, with the following entries:
 		- "status" [str]: "OK" if everyhing went well, otherwise an error message.
 		- "msg" [bytes]: the dectypted message.
+		- "source" [str]: the 'source' where the data comes from, one of "bytes", "str", 
+		  "file" or "dir". See the documentation of 'self.encryptMsg' for more information.
 		- "enc_time" [struct_time]: the time when the message was encrypted.
 		'''
 		signed_data = enc_card["signed_data"]
@@ -205,6 +220,8 @@ class Cryptool:
 
 		# Get some parts of the data.
 		pos = 1
+		source_id = struct.unpack(">Q", data[pos:pos + 8])[0]
+		pos += 8
 		salt = data[pos:pos + self.key_length]
 		pos += self.key_length
 		enc_time = struct.unpack(">Q", data[pos:pos + 8])[0]
@@ -249,19 +266,24 @@ class Cryptool:
 		except ValueError:
 			return {"status":"Error: invalid or corrupted data"}
 		
-		return {"status":"OK", "msg":msg, "enc_time":time.localtime(enc_time)}
+		source = self.sources_r[source_id]
+		return {"status":"OK", "msg":msg, "source":source, "enc_time":time.localtime(enc_time)}
 	#
 
-	def encryptFile(self, password, input_path, output_name=None):
+	def encryptFile(self, password, input_path, output_name=None, source="file"):
 		'''
 		Encripts the file given in 'input_path' and saves the resulting encrypted data
 		to the file with path name given in 'output_name' but appending the extension
-		'self.extension'.
+		'self.extension'. Is not output name is given then 'input_path' will be used.
+		We can change the tag of the 'source' of the data, in case we want to use files
+		as intermediate steps during encryption of other type of sources.
 		Parameters:
 		- password [bytes/str]: the password used for the encryption.
 		- input_path [str]: the absolute/relative path to the target file.
 		- output_name [str]: the extension 'self.extension' will be appended to this path name.
 		  The default output name is equal to 'input_path'.
+		- source [str]: "bytes", "str", "file" or "dir". The default is "file". See the 
+		  documentation of 'self.encryptMsg' for more information.
 		Return:
 		[dict]: relevant data about the procedure, in the form of a dictionray with the entries:
 		- "status" [str]: "OK" if everyhing went well, otherwise an error message.
@@ -277,7 +299,7 @@ class Cryptool:
 		file.close()
 
 		# Encrypt the file bytes.
-		enc_card = self.encryptMsg(msg, password)
+		enc_card = self.encryptMsg(msg, password, source)
 		if enc_card["status"] != "OK":
 			return {"status":enc_card["status"]}
 		
@@ -289,7 +311,61 @@ class Cryptool:
 		return {"status":"OK"}
 	#
 
+	def encryptDir(self, password, input_path, output_name=None):
+		'''
+		Encripts the directory (with all its content) given in 'input_path' and saves 
+		the resulting encrypted data to the file with path name given in 'output_name'
+		but appending the extension 'self.extension'.
+		Parameters:
+		- password [bytes/str]: the password used for the encryption.
+		- input_path [str]: the absolute/relative path to the target directory.
+		- output_name [str]: the extension 'self.extension' will be appended to this path name.
+		  The default output name is equal to 'input_path'.
+		Return:
+		[dict]: relevant data about the procedure, in the form of a dictionray with the entries:
+		- "status" [str]: "OK" if everyhing went well, otherwise an error message.
+		Usage:
+		- res = self.encryptFile(password, "input/file", "output/name")
+		'''
+		# Make sure the input path is a directory.
+		if not os.path.isdir(input_path):
+			return {"status":"Error: the input path is not a directory"}
+		
+		# Default ouput file name.
+		if output_name is None: output_name = input_path
+		
+		# Compress the directory to a temporal file.
+		shutil.make_archive(output_name, "zip", root_dir=input_path)
+		
+		# Encrypt the compresed file.
+		res = self.encryptFile(password, output_name + ".zip", output_name, "dir")
+		if res["status"] != "OK":
+			return {"status":res["status"]}
+
+		# Remove the compressed file.
+		os.remove(output_name + ".zip")
+
+		return {"status":"OK"}
+	#
+
 	def decryptFile(self, password, input_path, output_path=None):
+		'''
+		Decripts the file given in 'input_path' and saves the resulting decrypted data
+		to the file with path name given in 'output_path'. If the encrypted data corresponds
+		to a directory, then its content will be placed in the directory 'output_path'.
+		If no output path is given, then it is necessary that the input file has extension
+		'self.extension' in order to take the input path as the output path without such 
+		extension.
+		Parameters:
+		- password [bytes/str]: the password used for the decryption.
+		- input_path [str]: the absolute/relative path to the target file.
+		- output_path [str]: the path of the output file.
+		Return:
+		[dict]: relevant data about the procedure, in the form of a dictionray with the entries:
+		- "status" [str]: "OK" if everyhing went well, otherwise an error message.
+		Usage:
+		- res = self.decryptFile(password, "input/file", "output/file")
+		'''
 		# Separate the input path in the path name and the file extension.
 		file_name, file_extension = os.path.splitext(input_path)
 		# Default output file path.
@@ -304,7 +380,7 @@ class Cryptool:
 		file.close()
 
 		# Decrypt the file bytes.
-		decrypted = self.decryptMsg(signed_data, password)
+		decrypted = self.decryptMsg({"signed_data":signed_data}, password)
 		if decrypted["status"] != "OK":
 			return {"status":enc_card["status"]}
 
@@ -312,6 +388,13 @@ class Cryptool:
 		file = open(output_path, "wb")
 		file.write(decrypted["msg"])
 		file.close()
+
+		# Check if the data corresponds to a directory, make it a zip and decompress 
+		# it to the folder 'output_path'.
+		if decrypted["source"] == "dir":
+			os.rename(output_path, output_path + ".zip")
+			shutil.unpack_archive(output_path + ".zip", output_path, "zip")
+			os.remove(output_path + ".zip")
 
 		return {"status":"OK"}
 	#
@@ -321,6 +404,8 @@ if __name__ == "__main__":
 	ct = Cryptool()
 	#ct.encryptFile("Wallpapers.zip", "ZXCVBNM")
 	#ct.decryptFile("Wallpapers.zip.ctl", "ZXCVBNM")
+	#ct.encryptDir("ZXCVBNM", "Wallpapers_aux")
+	#ct.decryptFile("ZXCVBNM", "Wallpapers_aux.ctl")
 #
 
 '''
