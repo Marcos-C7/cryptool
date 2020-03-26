@@ -2,7 +2,7 @@
 
 Simplified interface for encrypting and decrypting: raw bytes, text, files and directories.
 
-===
+---
 
 Import the Cryptool class with:
 ```python
