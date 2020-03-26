@@ -1,15 +1,25 @@
 # cryptool
-Simplified interface for encryption of data and files.
 
-*asterisks* or _underscores_
-**asterisks** or __underscores__
-**asterisks and _underscores_**
+Simplified interface for encrypting and decrypting: raw bytes, text, files and directories.
 
-1. First ordered list item
-2. Another item
-  * Unordered sub-list. 
-1. Actual numbers don't matter, just that it's a number
-  1. Ordered sub-list
-4. And another item.
+===
 
-  You can have properly indented paragraphs within list items.
+Import the Cryptool class with:
+```python
+from cryptool import Cryptool
+```
+
+We can create a Cryptool object with:
+```python
+ct = Cryptool()
+```
+
+We can obtain the hash of a raw bytes string or a text string. For text strings, they will be
+encoded to raw bytes with the encoding defined in `ct.encoding`. The result is a `bytes` object
+of size `ct.hash_algorithm.digest_size`:
+```python
+hash = ct.getHash(b"bytes string")
+hash = ct.getHash("text string")
+```
+
+
