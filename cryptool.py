@@ -20,7 +20,7 @@ from cryptography.hazmat.primitives.hmac import HMAC
 
 class Cryptool:
 	'''
-	Class to simplify the encryption and decryption of data presented either in text strings, raw bytes or files.
+	Class to simplify the encryption and decryption of data presented either in raw bytes, text strings, files or directories.
 	'''
 	def __init__(self):
 		# The default text encoding when we encode/decode between 'str' and 'bytes'.

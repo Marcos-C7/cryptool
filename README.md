@@ -2,7 +2,7 @@
 
 Simplified interface for encrypting and decrypting: raw bytes, text, files and directories.
 
-Read full documentation [here](https://marcos-c7.github.io/cryptool/html/index.html)
+Read full documentation [here](https://marcos-c7.github.io/cryptool/html/classcryptool_1_1cryptool_1_1Cryptool.html)
 
 ---
 
