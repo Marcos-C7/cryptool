@@ -24,7 +24,7 @@ hash = ct.getHash(b"bytes string")
 hash = ct.getHash("text string")
 ```
 
-We can create a credentials card based on a password that contains a salt and a key.
+We can create a credentials card based on a password, that contains a salt and a key.
 We can chose the size in bytes of the generated key. If no size is given then the size
 will be `ct.key_length`. A salt of size `ct.key_length` can be given or it will be 
 ramdomly generated.
