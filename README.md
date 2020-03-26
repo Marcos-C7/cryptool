@@ -2,6 +2,8 @@
 
 Simplified interface for encrypting and decrypting: raw bytes, text, files and directories.
 
+Read full documentation [here](https://marcos-c7.github.io/cryptool/html/index.html)
+
 ---
 
 Import the Cryptool class with:
