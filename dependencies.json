@@ -1,9 +1,0 @@
-{
-	"cryptography":{
-		"version":">=2.8",
-		"installation":"pip install cryptography",
-		"website":"https://cryptography.io/en/latest/",
-		"documentation":"https://cryptography.io/en/latest/",
-		"notes":"some systems have pip3 instead of pip"
-	}
-}

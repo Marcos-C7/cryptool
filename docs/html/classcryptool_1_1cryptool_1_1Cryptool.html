@@ -174,7 +174,7 @@ to the file with path name given in 'output_path'. If the encrypted data corresp
 to a directory, then its content will be placed in the directory 'output_path'.
 If no output path is given, then it is necessary that the input file has extension
 'self.extension' in order to take the input path as the output path without such 
-extension.
+extension. If the output path/directory already exists, it will be replaced.
 Parameters:
 - password [bytes/str]: the password used for the decryption.
 - input_path [str]: the absolute/relative path to the target file.

@@ -7,7 +7,8 @@ import os
 import time
 import struct
 import shutil
-#import pdb
+import getpass
+import pdb
 
 
 from cryptography.hazmat.backends import default_backend
@@ -355,7 +356,7 @@ class Cryptool:
 		to a directory, then its content will be placed in the directory 'output_path'.
 		If no output path is given, then it is necessary that the input file has extension
 		'self.extension' in order to take the input path as the output path without such 
-		extension.
+		extension. If the output path/directory already exists, it will be replaced.
 		Parameters:
 		- password [bytes/str]: the password used for the decryption.
 		- input_path [str]: the absolute/relative path to the target file.
@@ -384,28 +385,76 @@ class Cryptool:
 		if decrypted["status"] != "OK":
 			return {"status":enc_card["status"]}
 
-		# Save the decrypted data to a file.
-		file = open(output_path, "wb")
+		# Save the decrypted data.
+		output_path_final = output_path + (".zip" if decrypted["source"] == "dir" else "")
+		file = open(output_path_final, "wb")
 		file.write(decrypted["msg"])
 		file.close()
 
-		# Check if the data corresponds to a directory, make it a zip and decompress 
+		# Check if the data corresponds to a directory, to zip it and decompress 
 		# it to the folder 'output_path'.
 		if decrypted["source"] == "dir":
-			os.rename(output_path, output_path + ".zip")
-			shutil.unpack_archive(output_path + ".zip", output_path, "zip")
-			os.remove(output_path + ".zip")
+			shutil.unpack_archive(output_path_final, output_path, "zip")
+			os.remove(output_path_final)
 
 		return {"status":"OK"}
 	#
 #
 
-if __name__ == "__main__":
+def main():
 	ct = Cryptool()
-	#ct.encryptFile("Wallpapers.zip", "ZXCVBNM")
-	#ct.decryptFile("Wallpapers.zip.ctl", "ZXCVBNM")
-	#ct.encryptDir("ZXCVBNM", "Wallpapers_aux")
-	#ct.decryptFile("ZXCVBNM", "Wallpapers_aux.ctl")
+	# Present the options.
+	options = {"1":"Encrypt file/directory", "2":"Decrypt file/directory"}
+	options_str = "\n".join(["(%s) %s" % (i,v) for i,v in options.items()])
+	option = input("Select an option:\n\n%s\n\nSelection: " % options_str)
+	print("-" * 20)
+	
+	# Make sure a valid option was selected.
+	if option not in options.keys():
+		print("Error: the selected option is not valid. Valid options: {%s}\n" % ", ".join(options.keys()))
+		return
+
+	# Get the input path and make sure it exists.
+	input_path = input("File/directory path: ")
+	input_path = input_path.strip().strip('"')
+	if not os.path.exists(input_path):
+		print("Error: the specified path does not exist\n")
+		return
+	
+	# Get the ouput name/path and check if it exists, if it does confirm for replace.
+	if option == "1":
+		print("\nEnter the encrypted file name (.%s will be appended)." % ct.extension)
+		print("The default is '%s'" % input_path)
+		output_name = input("Name: ") or input_path
+		output_name_ext = "%s.%s" % (output_name, ct.extension)
+		if os.path.exists(output_name_ext):
+			replace = input("File %s already exists. Replace? (y/n): " % output_name_ext)
+			if replace[0].lower() == "n": return
+		# Get the password securely.
+		password = getpass.getpass("Password (won't echo): ")
+		# Encrypt depending if the path corresponds to a file or a directory.
+		if os.path.isfile(input_path):
+			ct.encryptFile(password, input_path, output_name)
+		else:
+			ct.encryptDir(password, input_path, output_name)
+	else:
+		print("\nEnter the decrypted file/directory path.")
+		input_name, input_ext = os.path.splitext(input_path)
+		if input_ext[1:] == ct.extension:
+			print("The default is '%s'" % input_name)
+			output_path = input("Name: ") or input_name
+		else: output_path = input("Name: ")
+		if os.path.exists(output_path):
+			replace = input("File '%s' already exists. Replace? (y/n): " % output_path)
+			if replace[0].lower() == "n": return
+		# Get the password securely.
+		password = getpass.getpass("Password (won't echo): ")
+		# Decrypt.
+		ct.decryptFile(password, input_path, output_path)
+#
+
+if __name__ == "__main__":
+	main()
 #
 
 '''
