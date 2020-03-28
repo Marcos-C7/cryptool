@@ -126,15 +126,6 @@ Public Attributes</h2></td></tr>
 <tr class="memitem:a4d8f0baffcf24d022753e483e796b83f"><td class="memItemLeft" align="right" valign="top"><a id="a4d8f0baffcf24d022753e483e796b83f"></a>
 &#160;</td><td class="memItemRight" valign="bottom"><b>extension</b></td></tr>
 <tr class="separator:a4d8f0baffcf24d022753e483e796b83f"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a324c200fc6256b525385dceab8b01db9"><td class="memItemLeft" align="right" valign="top"><a id="a324c200fc6256b525385dceab8b01db9"></a>
-&#160;</td><td class="memItemRight" valign="bottom"><b>enc_version</b></td></tr>
-<tr class="separator:a324c200fc6256b525385dceab8b01db9"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a5459bc07c7bfcf0e9ba79b40d6f971b8"><td class="memItemLeft" align="right" valign="top"><a id="a5459bc07c7bfcf0e9ba79b40d6f971b8"></a>
-&#160;</td><td class="memItemRight" valign="bottom"><b>sources</b></td></tr>
-<tr class="separator:a5459bc07c7bfcf0e9ba79b40d6f971b8"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:af03ea4a4c6945a8f2ce5f92f97918a8c"><td class="memItemLeft" align="right" valign="top"><a id="af03ea4a4c6945a8f2ce5f92f97918a8c"></a>
-&#160;</td><td class="memItemRight" valign="bottom"><b>sources_r</b></td></tr>
-<tr class="separator:af03ea4a4c6945a8f2ce5f92f97918a8c"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <a name="details" id="details"></a><h2 class="groupheader">Detailed Description</h2>
 <div class="textblock"><pre class="fragment">Class to simplify the encryption and decryption of data presented either in raw bytes, text strings, files or directories.
@@ -183,7 +174,7 @@ If no output path is given, then it is necessary that the input file has extensi
 'self.extension' in order to take the input path as the output path without such 
 extension. If the output path/directory already exists, it will be replaced.
 Parameters:
-- password [bytes/str]: the password used for the decryption.
+- password [bytes/str]: the password to use for the decryption.
 - input_path [str]: the absolute/relative path to the target file.
 - output_path [str]: the path of the output file.
 Return:
@@ -286,7 +277,7 @@ Return:
 the resulting encrypted data to the file with path name given in 'output_name'
 but appending the extension 'self.extension'.
 Parameters:
-- password [bytes/str]: the password used for the encryption.
+- password [bytes/str]: the password to use for the encryption.
 - input_path [str]: the absolute/relative path to the target directory.
 - output_name [str]: the extension 'self.extension' will be appended to this path name.
   The default output name is equal to 'input_path'.
@@ -347,7 +338,7 @@ to the file with path name given in 'output_name' but appending the extension
 We can change the tag of the 'source' of the data, in case we want to use files
 as intermediate steps during encryption of other type of sources.
 Parameters:
-- password [bytes/str]: the password used for the encryption.
+- password [bytes/str]: the password to use for the encryption.
 - input_path [str]: the absolute/relative path to the target file.
 - output_name [str]: the extension 'self.extension' will be appended to this path name.
   The default output name is equal to 'input_path'.
@@ -406,7 +397,7 @@ The result will be given in the form of an encryption card containing relevant i
 the encryption procedure and the result.
 Prameters:
 - msg [bytes/str]: the message to encrypt.
-- password [bytes/str]: the password used for the encryption.
+- password [bytes/str]: the password to use for the encryption.
 - source [str]: "bytes", "str", "file" or "dir". The default is "bytes".
 Return:
 [dict]: The encryption card in the form of a dictionary, with the following entries:
@@ -673,7 +664,7 @@ Usage:
 detecting it.
 Parameters:
 - msg [bytes/str]: the message to sign.
-- password [bytes/str]: the password used for signing the message.
+- password [bytes/str]: the password to use for signing the message.
 Return:
 [bytes]: the raw bytes string that contains both the messsage and the signature.
 Usage:

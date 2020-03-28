@@ -38,15 +38,15 @@ class Cryptool:
 		self.salt = lambda: os.urandom(self.key_length)
 		# The file extension used to save encrypted files.
 		self.extension = "ctl"
+
 		# In case we change the encrypted data structure in the future, we will append to the encrypted message
 		# an encryption version. In this way we can support compatibility with data enctypted with old versions.
-		self.enc_version = 1
-
+		self._enc_version = 1
 		# TAGS used to determine how to process the decrypted data.
 		# bytes:raw bytes string | str:text string | file:a file | dir:a directory
-		self.sources = {"bytes":1, "str":2, "file":3, "dir":4}
+		self._sources = {"bytes":1, "str":2, "file":3, "dir":4}
 		# The reverse mapping of the sources.
-		self.sources_r = {v:k for k,v in self.sources.items()}
+		self._sources_r = {v:k for k,v in self._sources.items()}
 	#
 
 	def msgToBytes(self, msg, enc=None):
@@ -149,7 +149,7 @@ class Cryptool:
 		detecting it.
 		Parameters:
 		- msg [bytes/str]: the message to sign.
-		- password [bytes/str]: the password used for signing the message.
+		- password [bytes/str]: the password to use for signing the message.
 		Return:
 		[bytes]: the raw bytes string that contains both the messsage and the signature.
 		Usage:
@@ -210,7 +210,7 @@ class Cryptool:
 		the encryption procedure and the result.
 		Prameters:
 		- msg [bytes/str]: the message to encrypt.
-		- password [bytes/str]: the password used for the encryption.
+		- password [bytes/str]: the password to use for the encryption.
 		- source [str]: "bytes", "str", "file" or "dir". The default is "bytes".
 		Return:
 		[dict]: The encryption card in the form of a dictionary, with the following entries:
@@ -238,8 +238,8 @@ class Cryptool:
 
 		# Merge all the components that need to be signed.
 		current_time = int(time.time())
-		source_flag = struct.pack(">Q", self.sources.get(source, "bytes"))
-		enc_version_flag = struct.pack(">Q", self.enc_version)
+		source_flag = struct.pack(">Q", self._sources.get(source, "bytes"))
+		enc_version_flag = struct.pack(">Q", self._enc_version)
 		# data: version||source||   salt   ||time||          iv               ||                   secret                         ||
 		# size:    8   ||   8  ||key_length|| 8  ||cipher algorithm block size||padded msg multiple of cipher algorithm block size||
 		data = enc_version_flag + source_flag + credentials["salt"] + struct.pack(">Q", current_time) + iv + secret
@@ -316,7 +316,7 @@ class Cryptool:
 		except ValueError:
 			return {"status":"Error: invalid or corrupted data"}
 		
-		source = self.sources_r[source_id]
+		source = self._sources_r[source_id]
 		return {"status":"OK", "msg":msg, "source":source, "enc_time":time.localtime(enc_time)}
 	#
 
@@ -328,7 +328,7 @@ class Cryptool:
 		We can change the tag of the 'source' of the data, in case we want to use files
 		as intermediate steps during encryption of other type of sources.
 		Parameters:
-		- password [bytes/str]: the password used for the encryption.
+		- password [bytes/str]: the password to use for the encryption.
 		- input_path [str]: the absolute/relative path to the target file.
 		- output_name [str]: the extension 'self.extension' will be appended to this path name.
 		  The default output name is equal to 'input_path'.
@@ -367,7 +367,7 @@ class Cryptool:
 		the resulting encrypted data to the file with path name given in 'output_name'
 		but appending the extension 'self.extension'.
 		Parameters:
-		- password [bytes/str]: the password used for the encryption.
+		- password [bytes/str]: the password to use for the encryption.
 		- input_path [str]: the absolute/relative path to the target directory.
 		- output_name [str]: the extension 'self.extension' will be appended to this path name.
 		  The default output name is equal to 'input_path'.
@@ -407,7 +407,7 @@ class Cryptool:
 		'self.extension' in order to take the input path as the output path without such 
 		extension. If the output path/directory already exists, it will be replaced.
 		Parameters:
-		- password [bytes/str]: the password used for the decryption.
+		- password [bytes/str]: the password to use for the decryption.
 		- input_path [str]: the absolute/relative path to the target file.
 		- output_path [str]: the path of the output file.
 		Return:
