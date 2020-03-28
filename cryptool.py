@@ -16,6 +16,7 @@ from cryptography.hazmat.primitives import hashes, padding
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.hmac import HMAC
+from cryptography.exceptions import InvalidSignature
 
 
 
@@ -37,6 +38,9 @@ class Cryptool:
 		self.salt = lambda: os.urandom(self.key_length)
 		# The file extension used to save encrypted files.
 		self.extension = "ctl"
+		# In case we change the encrypted data structure in the future, we will append to the encrypted message
+		# an encryption version. In this way we can support compatibility with data enctypted with old versions.
+		self.enc_version = 1
 
 		# TAGS used to determine how to process the decrypted data.
 		# bytes:raw bytes string | str:text string | file:a file | dir:a directory
@@ -44,7 +48,25 @@ class Cryptool:
 		# The reverse mapping of the sources.
 		self.sources_r = {v:k for k,v in self.sources.items()}
 	#
-	
+
+	def msgToBytes(self, msg, enc=None):
+		'''
+		The cryptographic methods work on raw bytes. In order to simplify the usage of
+		text strings, this function checks if the message is already in raw bytes and
+		if not, then it is assumed to be a text string and encodes to raw bytes.
+		Parameters:
+		- msg [byes/str]: the message to safely convert to raw bytes.
+		- enc [srt]: the encoding used to encode string objects, de default is 'self.encoding'.
+		Return:
+		- [bytes]: The raw bytes string.
+		Usage:
+		- msg = msgToBytes(msg)
+		- msg = msgToBytes(msg, "cp1252")
+		'''
+		if enc == None: enc = self.encoding
+		return msg if type(msg) == bytes else msg.encode(enc)
+	#
+
 	def getKDF(self, salt, length=None):
 		'''
 		Defines a Key Derivation Function (KDF). This is useful to generate secure cryptographic keys from
@@ -78,25 +100,7 @@ class Cryptool:
 		'''
 		return algorithms.AES(key)
 	#
-
-	def msgToBytes(self, msg, enc=None):
-		'''
-		The cryptographic methods work on raw bytes. In order to simplify the usage of
-		text strings, this function checks if the message is already in raw bytes and
-		if not, then it is assumed to be a text string and encodes to raw bytes.
-		Parameters:
-		- msg [byes/str]: the message to safely convert to raw bytes.
-		- enc [srt]: the encoding used to encode string objects, de default is 'self.encoding'.
-		Return:
-		- [bytes]: The raw bytes string.
-		Usage:
-		- msg = msgToBytes(msg)
-		- msg = msgToBytes(msg, "cp1252")
-		'''
-		if enc == None: enc = self.encoding
-		return msg if type(msg) == bytes else msg.encode(enc)
-	#
-
+	
 	def getHash(self, msg):
 		'''
 		Generate a secure hash (no key used) of the given message. The hash algorithm is defined
@@ -139,6 +143,63 @@ class Cryptool:
 		return {"key":kdf.derive(password), "salt":salt}
 	#
 
+	def signMsg(self, msg, password):
+		'''
+		Signs the given message. This procedure ensures that a message can not be altered without
+		detecting it.
+		Parameters:
+		- msg [bytes/str]: the message to sign.
+		- password [bytes/str]: the password used for signing the message.
+		Return:
+		[bytes]: the raw bytes string that contains both the messsage and the signature.
+		Usage:
+		- signed_msg = self.signMsg("my message", "my password")
+		'''
+		msg = self.msgToBytes(msg)
+		cred = self.getCredentialsFromPassword(password, length=self.hash_algorithm.digest_size)
+		data = b"\x80" + cred["salt"] + msg
+		# Generate the signature. The signature will have the same size as the hash algorithm digest.
+		signer = HMAC(cred["key"], self.hash_algorithm, backend=default_backend())
+		signer.update(data)
+		signature = signer.finalize()
+		return data + signature
+	#
+
+	def validateSgnature(self, signed_data, password):
+		'''
+		Validates a signature created by 'self.signMsg'.
+		Prameters:
+		- signed_data [bytes]: the signed message to authenticate.
+		- password [bytes/str]: the password used for signing the message.
+		Return:
+		[dict]: relevant data about the validation, in the form of a dictionray with the entries:
+		- "status" [str]: "OK" if the message got successfully authenticated, otherwise an error message.
+		- "msg" [bytes]: the raw bytes string containing the original message.
+		Usage:
+		- validation = self.validateSgnature(signed_data, "my password")
+		  if validation["status"] == "OK": ... do something with validation["msg"] ...
+		'''
+		# Check that the string starts well.
+		if signed_data[0] != 0x80:
+			return {"status":"Error: invalid or corrupted data"}
+
+		# Split the signed message.
+		salt = signed_data[1:1 + self.key_length]
+		data = signed_data[:-self.hash_algorithm.digest_size]
+		signature = signed_data[-self.hash_algorithm.digest_size:]
+
+		# Verify the signature.
+		cred = self.getCredentialsFromPassword(password, length=self.hash_algorithm.digest_size, salt=salt)
+		signer = HMAC(cred["key"], self.hash_algorithm, backend=default_backend())
+		signer.update(data)
+		try:
+			signer.verify(signature)
+		except InvalidSignature:
+			return {"status":"Error: invalid or corrupted data"}
+		
+		return {"status":"OK", "msg":data[1 + self.key_length:]}
+	#
+
 	def encryptMsg(self, msg, password, source="bytes"):
 		'''
 		Encrypts the given message using the given password. The encrypted data is autenticated via a MAC
@@ -154,41 +215,40 @@ class Cryptool:
 		Return:
 		[dict]: The encryption card in the form of a dictionary, with the following entries:
 		- "status" [str]: "OK" if everyhing went well, otherwise an error message.
-		- "signed_data" [bytes]: the encrypted message.
+		- "coded_data" [bytes]: the encrypted message.
 		Usage:
 		- enc_card = self.encryptMsg(msg, password)
-		  if enc_card["status"] == "OK": ... do something with enc_card["signed_data"] ...
+		  if enc_card["status"] == "OK": ... do something with enc_card["coded_data"] ...
 		'''
 		msg = self.msgToBytes(msg)
-		# Generat keys for encryption and one for autentication at once derived from the same password.
-		credentials = self.getCredentialsFromPassword(password, length=self.key_length + self.hash_algorithm.digest_size)
-		key_enc = credentials["key"][:self.key_length]
-		key_aut = credentials["key"][self.key_length:]
+		# Generat keys for the encryption of the msg.
+		credentials = self.getCredentialsFromPassword(password, length=self.key_length)
+		
 		# The block cipher algorithm.
-		algorithm = self.getCipherAlgorithm(key_enc)
-		# The mode of encryption (the iv must be the same size as the block size of the cipher algorithm in Bytes).
-		iv = os.urandom(algorithm.block_size // 8)
-		mode = modes.CBC(iv)
-		# Create the cipher.
-		cipher = Cipher(algorithm, mode, backend=default_backend()).encryptor()
+		algorithm = self.getCipherAlgorithm(credentials["key"])
 		# In order to use the CBC mode, we need padding in the message.
 		padder = padding.PKCS7(algorithm.block_size).padder()
 		padded_msg = padder.update(msg) + padder.finalize()
-		# Encrypt the data.
+		# The mode of encryption (the iv must be the same size as the block size of the cipher algorithm in Bytes).
+		iv = os.urandom(algorithm.block_size // 8)
+		mode = modes.CBC(iv)
+		# Create the cipher and encrypt the padded message.
+		cipher = Cipher(algorithm, mode, backend=default_backend()).encryptor()
 		secret = cipher.update(padded_msg) + cipher.finalize()
+
 		# Merge all the components that need to be signed.
 		current_time = int(time.time())
 		source_flag = struct.pack(">Q", self.sources.get(source, "bytes"))
-		data = b"\x80" + source_flag + credentials["salt"] + struct.pack(">Q", current_time) + iv + secret
-		# Generate the signature. The signature will have the same size as the used hash algorithm.
-		signer = HMAC(key_aut, self.hash_algorithm, backend=default_backend())
-		signer.update(data)
-		hmac = signer.finalize()
+		enc_version_flag = struct.pack(">Q", self.enc_version)
+		# data: version||source||   salt   ||time||          iv               ||                   secret                         ||
+		# size:    8   ||   8  ||key_length|| 8  ||cipher algorithm block size||padded msg multiple of cipher algorithm block size||
+		data = enc_version_flag + source_flag + credentials["salt"] + struct.pack(">Q", current_time) + iv + secret
+
+		# Sign the data.
+		coded_data = self.signMsg(data, password)
 		
-		# data: ||b"\x80"||source||   salt   ||time||          iv               ||                   secret                         ||       signature             ||
-		# size: ||   1   ||   8  ||key_length|| 8  ||cipher algorithm block size||padded msg multiple of cipher algorithm block size||digest size of hash algorithm||
 		# We include the time just in case we want to do something with it like expiration time.
-		return {"status":"OK", "signed_data":data + hmac}
+		return {"status":"OK", "coded_data":coded_data}
 	#
 	
 	def decryptMsg(self, enc_card, password):
@@ -201,7 +261,7 @@ class Cryptool:
 		decryption procedure and the result.
 		Parameters:
 		- enc_card [dict]: the card with the encrypted data, must have at least the entry
-		  "signed_data" mapping to the raw bytes string to decrypt.
+		  "coded_data" mapping to the raw bytes string to decrypt.
 		- password [bytes/str]: the password to use in the decryption.
 		Return:
 		[dict]: The decryption card in the form of a dictionary, with the following entries:
@@ -211,40 +271,29 @@ class Cryptool:
 		  "file" or "dir". See the documentation of 'self.encryptMsg' for more information.
 		- "enc_time" [struct_time]: the time when the message was encrypted.
 		'''
-		signed_data = enc_card["signed_data"]
-		# Validate the first byte of the signed_data.
-		if signed_data[0] != 0x80:
+		# Validate the signature.
+		validation = self.validateSgnature(enc_card["coded_data"], password)
+		if validation["status"] != "OK":
 			return {"status":"Error: invalid or corrupted data"}
-		# Separate the data from the signature.
-		data = signed_data[:-self.hash_algorithm.digest_size]
-		hmac = signed_data[-self.hash_algorithm.digest_size:]
+		data = validation["msg"]
 
 		# Get some parts of the data.
-		pos = 1
+		pos = 0
+		enc_version = struct.unpack(">Q", data[pos:pos + 8])[0]
+		pos += 8
 		source_id = struct.unpack(">Q", data[pos:pos + 8])[0]
 		pos += 8
 		salt = data[pos:pos + self.key_length]
 		pos += self.key_length
 		enc_time = struct.unpack(">Q", data[pos:pos + 8])[0]
 		pos += 8
-		
+
 		# Obtain the credentials.
-		credentials = self.getCredentialsFromPassword(password, length=self.key_length + self.hash_algorithm.digest_size, salt=salt)
-		key_enc = credentials["key"][:self.key_length]
-		key_aut = credentials["key"][self.key_length:]
-
-		# Validate the signature.
-		signer = HMAC(key_aut, self.hash_algorithm, backend=default_backend())
-		signer.update(data)
-		try:
-			signer.verify(hmac)
-		except InvalidSignature:
-			return {"status":"Error: invalid or corrupted data"}
-		
+		credentials = self.getCredentialsFromPassword(password, length=self.key_length, salt=salt)
 		# The cipher algorithm.
-		algorithm = self.getCipherAlgorithm(key_enc)
+		algorithm = self.getCipherAlgorithm(credentials["key"])
 
-		# Get the other parts of the data.
+		# We need the algorithm before separating the remaining parts.
 		iv = data[pos:pos + algorithm.block_size // 8]
 		pos += algorithm.block_size // 8
 		secret = data[pos:]
@@ -306,7 +355,7 @@ class Cryptool:
 		
 		# Save the encrypted data to a file with extension 'self.extension'.
 		file = open("%s.%s" % (output_name, self.extension), "wb")
-		file.write(enc_card["signed_data"])
+		file.write(enc_card["coded_data"])
 		file.close()
 
 		return {"status":"OK"}
@@ -377,13 +426,13 @@ class Cryptool:
 		
 		# Load the encrypted file as raw bytes.
 		file = open(input_path, "rb")
-		signed_data = file.read()
+		coded_data = file.read()
 		file.close()
 
 		# Decrypt the file bytes.
-		decrypted = self.decryptMsg({"signed_data":signed_data}, password)
+		decrypted = self.decryptMsg({"coded_data":coded_data}, password)
 		if decrypted["status"] != "OK":
-			return {"status":enc_card["status"]}
+			return {"status":decrypted["status"]}
 
 		# Save the decrypted data.
 		output_path_final = output_path + (".zip" if decrypted["source"] == "dir" else "")
@@ -411,33 +460,32 @@ def main():
 	
 	# Make sure a valid option was selected.
 	if option not in options.keys():
-		print("Error: the selected option is not valid. Valid options: {%s}\n" % ", ".join(options.keys()))
-		return
+		return {"status":"Error: the selected option is not valid. Valid options: {%s}\n" % ", ".join(options.keys())}
 
 	# Get the input path and make sure it exists.
 	input_path = input("File/directory path: ")
 	input_path = input_path.strip().strip('"')
 	if not os.path.exists(input_path):
-		print("Error: the specified path does not exist\n")
-		return
+		return {"status":"Error: the specified path does not exist\n"}
 	
-	# Get the ouput name/path and check if it exists, if it does confirm for replace.
 	if option == "1":
+		# Get the ouput name and check if it exists, if it does confirm for replace.
 		print("\nEnter the encrypted file name (.%s will be appended)." % ct.extension)
 		print("The default is '%s'" % input_path)
 		output_name = input("Name: ") or input_path
 		output_name_ext = "%s.%s" % (output_name, ct.extension)
 		if os.path.exists(output_name_ext):
 			replace = input("File %s already exists. Replace? (y/n): " % output_name_ext)
-			if replace[0].lower() == "n": return
+			if replace[0].lower() == "n": return {"status":"Warning: output file already exists, won't replace."}
 		# Get the password securely.
 		password = getpass.getpass("Password (won't echo): ")
 		# Encrypt depending if the path corresponds to a file or a directory.
 		if os.path.isfile(input_path):
-			ct.encryptFile(password, input_path, output_name)
+			res = ct.encryptFile(password, input_path, output_name)
 		else:
-			ct.encryptDir(password, input_path, output_name)
+			res = ct.encryptDir(password, input_path, output_name)
 	else:
+		# Get the ouput path and check if it exists, if it does confirm for replace.
 		print("\nEnter the decrypted file/directory path.")
 		input_name, input_ext = os.path.splitext(input_path)
 		if input_ext[1:] == ct.extension:
@@ -446,19 +494,21 @@ def main():
 		else: output_path = input("Name: ")
 		if os.path.exists(output_path):
 			replace = input("File '%s' already exists. Replace? (y/n): " % output_path)
-			if replace[0].lower() == "n": return
+			if replace[0].lower() == "n": return {"status":"Warning: output path already exists, won't replace."}
 		# Get the password securely.
 		password = getpass.getpass("Password (won't echo): ")
 		# Decrypt.
-		ct.decryptFile(password, input_path, output_path)
+		res = ct.decryptFile(password, input_path, output_path)
+	return {"status":res["status"]}
 #
 
 if __name__ == "__main__":
-	main()
+	res = main()
+	print(res["status"])
+	#ct = Cryptool()
 #
 
 '''
-# Used by fernet.
 base64.urlsafe_b64encode(bytes)	: bytes -> base64 representation.
 base64.urlsafe_b64decode(bytes)	: base64 representation -> bytes. (if there are padding problems, just append b"====" to the input)
 
