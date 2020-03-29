@@ -15,13 +15,13 @@ We can create a Cryptool object with:
 ```python
 ct = Cryptool()
 ```
+___
 
 We can obtain the hash of message given by either a raw bytes string or a text string:
 ```python
 h = ct.getHash(b"message")
 h = ct.getHash("message")
 ```
-
 We can sign a message via an HMAC authenication code:
 ```python
 signed_msg = ct.signMsg(b"message")
@@ -30,6 +30,7 @@ We can validate a signed message by the previous method:
 ```python
 validation = ct.signvalidateSgnatureMsg(signed_msg)
 ```
+___
 
 We can encrypt and sign a message using a password. We can include a `source` tag that will be
 returned when we decrypt the message in the future. The possible tags are 
@@ -39,7 +40,6 @@ enc_card = ct.encryptMsg("message", "my password", source="str")
 if enc_card["status"] == "OK":
 	#... do something with enc_card["signed_data"] ...
 ```
-
 We can decrypt a message encrypted by the previous method, to recover the original messahe
 and the source tag:
 ```python
@@ -47,6 +47,7 @@ dec_card = ct.decryptMsg(enc_card, "my password")
 if dec_card["status"] == "OK":
 	#... do something with dec_card["msg"] ...
 ```
+___
 
 We can directly encrypt a file append a source tag to the encryption, to cover the
 the case when a a file is an itermediate step to encrypt a different source of data:
