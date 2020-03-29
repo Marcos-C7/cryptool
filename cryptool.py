@@ -502,10 +502,17 @@ def main():
 	return {"status":res["status"]}
 #
 
+def tst(x):
+	y = x[:-1]
+	pdb.set_trace()
+	del y
+#
+
 if __name__ == "__main__":
-	res = main()
-	print(res["status"])
+	#res = main()
+	#print(res["status"])
 	#ct = Cryptool()
+	#x = "a" * 1024**3
 #
 
 '''
