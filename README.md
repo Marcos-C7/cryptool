@@ -17,7 +17,7 @@ ct = Cryptool()
 ```
 ___
 
-We can obtain the hash of message given by either a raw bytes string or a text string:
+We can obtain the hash of a message given by either a raw bytes string or a text string:
 ```python
 h = ct.getHash(b"message")
 h = ct.getHash("message")

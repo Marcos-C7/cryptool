@@ -4,7 +4,7 @@ The tree of imports of a package is structured as follows:
 	- module_name.		# Name of the .py file (wihout the .py).
 		- object_name	# Name of the class or function defined within the module name.
 
-In our case, the Cryptool class is defined in the root:
+In our case, the Cryptool class is defined in the route:
 - cryptool.cryptool.Cryptool
 
 If we want to import all the contents of the module 'cryptool' we need:
