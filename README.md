@@ -59,7 +59,7 @@ We can directly encrypt a directory into a single encrypted file:
 res = ct.encryptDir("my password", "input/directory", "output/name")
 ```
 
-We can directly decrypt an encrypted file by either of the previous functions. 
+We can directly decrypt a file encrypted by either of the previous functions. 
 If the encryption corresponds to a directory then its content will be placed in the directory
 given by the output path parameter:
 ```python
