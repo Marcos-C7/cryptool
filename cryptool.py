@@ -25,6 +25,9 @@ class Cryptool:
 	Class to simplify the encryption and decryption of data presented either in raw bytes, text strings, files or directories.
 	'''
 	def __init__(self):
+		# The package version.
+		self.__version__ = "0.1.0"
+
 		# The default text encoding when we encode/decode between 'str' and 'bytes'.
 		self.encoding = "utf8"
 		# The hash algorithm used in all the procedures 
