@@ -126,7 +126,7 @@ class Cryptool:
 		'''
 		Creates a credentials card derived from the given 'password'. The credentials include a 
 		cryptograhic key of the given 'length' and the salt used to generate the key from the 
-		password. An optional 'salt' will can be provided to recover previously generated credentials.
+		password. An optional 'salt' can be provided to recover previously generated credentials.
 		Remember that in order to generate the same password we need the same pair password-salt.
 		Parameters:
 		- password [bytes/str]: the password to derive the key.
@@ -168,7 +168,7 @@ class Cryptool:
 		return data + signature
 	#
 
-	def validateSgnature(self, signed_data, password):
+	def validateSignature(self, signed_data, password):
 		'''
 		Validates a signature created by 'self.signMsg'.
 		Prameters:
@@ -179,7 +179,7 @@ class Cryptool:
 		- "status" [str]: "OK" if the message got successfully authenticated, otherwise an error message.
 		- "msg" [bytes]: the raw bytes string containing the original message.
 		Usage:
-		- validation = self.validateSgnature(signed_data, "my password")
+		- validation = self.validateSignature(signed_data, "my password")
 		  if validation["status"] == "OK": ... do something with validation["msg"] ...
 		'''
 		# Check that the string starts well.
@@ -275,7 +275,7 @@ class Cryptool:
 		- "enc_time" [struct_time]: the time when the message was encrypted.
 		'''
 		# Validate the signature.
-		validation = self.validateSgnature(enc_card["coded_data"], password)
+		validation = self.validateSignature(enc_card["coded_data"], password)
 		if validation["status"] != "OK":
 			return {"status":"Error: invalid or corrupted data"}
 		data = validation["msg"]
