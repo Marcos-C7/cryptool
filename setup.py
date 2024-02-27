@@ -1,7 +1,7 @@
 from distutils.core import setup
 
 setup(	name='cryptool',
-		version='0.1.0',
+		version='0.1.1',
 		description='Simplified interface for encrypting and decrypting: raw bytes, text, files and directories.',
 		author='Marcos C. V. M.',
 		url='https://github.com/Marcos-C7/cryptool',
