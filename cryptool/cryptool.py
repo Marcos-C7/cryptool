@@ -26,7 +26,7 @@ class Cryptool:
 	'''
 	def __init__(self):
 		# The package version.
-		self.__version__ = "0.1.0"
+		self.__version__ = "1.0.0"
 
 		# The default text encoding when we encode/decode between 'str' and 'bytes'.
 		self.encoding = "utf8"
